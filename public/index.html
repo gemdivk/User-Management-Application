@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Management</title>
+  <style>
+    body {
+      background: linear-gradient(135deg, #f06e95, #b86dae, #eaafc8);
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      color: #ffafda;
+    }
+    .container {
+      max-width: 800px;
+      margin: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    table, th, td {
+      border: 1px solid #f08dab;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+    }
+    th {
+      background-color: #f887c7;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+    }
+    button {
+      padding: 10px 15px;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-add {
+      background-color: #d53884c6;
+      color: #ffafda;
+    }
+    .btn-edit {
+      background-color: #e068b6;
+      color: white;
+    }
+    .btn-delete {
+      background-color: #ea4c5c;
+      color: white;
+    }
+    .filter-container {
+      margin-top: 20px;
+    }
+    .filter-container input {
+      margin-right: 10px;
+      padding: 5px;
+    }
+    .chart-container {
+      margin-top: 30px;
+      text-align: center;
+    }
+    canvas {
+      max-width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>User Management</h1>
+
+    <form id="addUserForm">
+      <div class="form-group">
+        <label for="name">Name:</label>
+        <input type="text" id="name" name="name" required>
+      </div>
+      <div class="form-group">
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="email" required>
+      </div>
+      <div class="form-group">
+        <label for="age">Age:</label>
+        <input type="number" id="age" name="age" required>
+      </div>
+      <button type="submit" class="btn-add">Add User</button>
+    </form>
+
+    <div class="filter-container">
+      <label for="filterName">Filter by Name:</label>
+      <input type="text" id="filterName" placeholder="Enter name">
+
+      <label for="filterAge">Filter by Age:</label>
+      <input type="number" id="filterAge" placeholder="Enter age">
+
+      <button id="applyFilter">Apply Filters</button>
+      <button id="clearFilter">Clear Filters</button>
+    </div>
+
+    <table id="userTable">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Age</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+      </tbody>
+    </table>
+
+    <div class="chart-container">
+      <h2>Age Distribution</h2>
+      <canvas id="ageChart"></canvas>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const userTable = document.getElementById('userTable').querySelector('tbody');
+    const addUserForm = document.getElementById('addUserForm');
+    const filterNameInput = document.getElementById('filterName');
+    const filterAgeInput = document.getElementById('filterAge');
+    const ageChartCanvas = document.getElementById('ageChart').getContext('2d');
+    let ageChart;
+
+    async function fetchUsers(filters = {}) {
+      const query = new URLSearchParams(filters).toString();
+      const response = await fetch(`http://localhost:3000/users?${query}`);
+      const users = await response.json();
+      userTable.innerHTML = '';
+      users.forEach(user => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${user.name}</td>
+          <td>${user.email}</td>
+          <td>${user.age}</td>
+          <td class="actions">
+            <button class="btn-edit" onclick="editUser('${user._id}')">Edit</button>
+            <button class="btn-delete" onclick="deleteUser('${user._id}')">Delete</button>
+          </td>
+        `;
+        userTable.appendChild(row);
+      });
+      updateChart(users);
+    }
+
+    addUserForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(addUserForm);
+      const newUser = {
+        name: formData.get('name'),
+        email: formData.get('email'),
+        age: parseInt(formData.get('age')),
+      };
+
+      await fetch('http://localhost:3000/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUser),
+      });
+      addUserForm.reset();
+      fetchUsers();
+    });
+
+    async function deleteUser(userId) {
+      await fetch(`http://localhost:3000/users/${userId}`, { method: 'DELETE' });
+      fetchUsers();
+    }
+
+    async function editUser(userId) {
+      const userName = prompt('Enter new name:');
+      const userEmail = prompt('Enter new email:');
+      const userAge = prompt('Enter new age:');
+
+      if (userName && userEmail && userAge) {
+        await fetch(`http://localhost:3000/users/${userId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: userName, email: userEmail, age: parseInt(userAge) }),
+        });
+        fetchUsers();
+      } else {
+        alert('All fields are required.');
+      }
+    }
+
+    document.getElementById('applyFilter').addEventListener('click', () => {
+      const filters = {};
+      if (filterNameInput.value) filters.name = filterNameInput.value;
+      if (filterAgeInput.value) filters.age = filterAgeInput.value;
+      fetchUsers(filters);
+    });
+
+    document.getElementById('clearFilter').addEventListener('click', () => {
+      filterNameInput.value = '';
+      filterAgeInput.value = '';
+      fetchUsers();
+    });
+
+    function updateChart(users) {
+      const ageGroups = users.reduce((acc, user) => {
+        const ageGroup = Math.floor(user.age / 10) * 10;
+        acc[ageGroup] = (acc[ageGroup] || 0) + 1;
+        return acc;
+      }, {});
+
+      const labels = Object.keys(ageGroups).map(group => `${group}-${parseInt(group) + 9}`);
+      const data = Object.values(ageGroups);
+
+      if (ageChart) {
+        ageChart.destroy();
+      }
+
+      ageChart = new Chart(ageChartCanvas, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Number of Users',
+            data,
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            borderColor: 'rgba(75, 192, 192, 1)',
+            borderWidth: 1,
+          }],
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true,
+            },
+          },
+        },
+      });
+    }
+
+    fetchUsers();
+  </script>
+</body>
+</html>
